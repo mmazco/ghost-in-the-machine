@@ -57,7 +57,7 @@
 
       // Health-based appearance
       const getGhostStyle = () => {
-        if (health === 'dead') return { fill: '#666', opacity: 0.5 };
+        if (health === 'dead') return { fill: '#fff', opacity: 0.7 };
         if (health === 'critical') return { fill: '#fff', opacity: 0.9 };
         if (health === 'sick') return { fill: '#fff', opacity: 0.95 };
         if (health === 'tired') return { fill: '#fff', opacity: 1 };
@@ -526,13 +526,27 @@
                     const row = Math.floor(idx / 12);
                     const col = idx % 12;
                     const isCore = computing && isCoreActive(row, col);
-                    // When showGhost is false, don't show the ghost pattern
-                    const showActive = showGhost ? active : false;
+                    // When showGhost is true (SVG mode), don't show pixel pattern - only show active cores
+                    // When showGhost is false (grid mode), show the pixel ghost pattern
+                    const showPixelPattern = !showGhost && active;
                     return (
-                      <GridDot key={idx} active={showActive} isCore={isCore} />
+                      <GridDot key={idx} active={showPixelPattern} isCore={isCore} />
                     );
                   })}
                 </div>
+
+                {/* Ghost SVG overlay with visual indicators */}
+                {showGhost && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <Ghost 
+                      health={health} 
+                      temp={temp} 
+                      power={power} 
+                      computing={computing} 
+                      l1Usage={l1Usage} 
+                    />
+                  </div>
+                )}
 
                 {/* Scanline effect */}
                 <div
