@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ghost States Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fff;
+      padding: 40px 20px;
+      color: #333;
+    }
+    h1 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+    .subtitle { text-align: center; color: #888; margin-bottom: 40px; }
+
+    .section { margin-bottom: 60px; }
+    .section-title {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+      color: #555;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 12px;
+      margin-bottom: 30px;
+    }
+
+    .states-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    .state-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .device {
+      background: linear-gradient(180deg, #f5f5f5 0%, #e5e5e5 100%);
+      border: 1px solid #d4d4d4;
+      border-radius: 16px;
+      padding: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      margin-bottom: 12px;
+    }
+
+    .screen-bezel {
+      background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+      border-radius: 12px;
+      padding: 8px;
+    }
+
+    .screen {
+      background: #111;
+      border-radius: 8px;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .label { font-size: 13px; font-weight: 600; color: #333; }
+    .sublabel { font-size: 11px; color: #888; margin-top: 4px; }
+    .metrics { font-size: 10px; color: #aaa; margin-top: 6px; font-family: monospace; }
+
+    /* Ghost SVG animations */
+    .ghost { animation: float 2s ease-in-out infinite; }
+    .ghost.computing { animation: vibrate 0.1s linear infinite; }
+    .ghost.dead { animation: none; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
+    @keyframes vibrate {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-1px); }
+      75% { transform: translateX(1px); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spinReverse {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes drip {
+      0% { transform: translateY(0); opacity: 0; }
+      20% { opacity: 0.8; }
+      80% { opacity: 0.8; }
+      100% { transform: translateY(15px); opacity: 0; }
+    }
+
+    .sweat1 { animation: drip 0.8s ease-in infinite; }
+    .sweat2 { animation: drip 0.8s ease-in infinite 0.2s; }
+    .sweat3 { animation: drip 0.8s ease-in infinite 0.4s; }
+
+    .dizzy-eye { transform-origin: center; }
+    .dizzy-eye.left { animation: spin 2s linear infinite; }
+    .dizzy-eye.right { animation: spinReverse 2s linear infinite; }
+    .dizzy-eye.fast.left { animation: spin 1s linear infinite; }
+    .dizzy-eye.fast.right { animation: spinReverse 1s linear infinite; }
+
+    .warning { animation: blink 0.5s ease-in-out infinite; }
+
+    .sparkle { animation: blink 0.6s ease-in-out infinite; }
+    .sparkle:nth-child(2) { animation-delay: 0.15s; }
+    .sparkle:nth-child(3) { animation-delay: 0.3s; }
+    .sparkle:nth-child(4) { animation-delay: 0.45s; }
+
+    /* Grid */
+    .grid-container {
+      background: #111;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+    }
+    .grid-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: #333;
+    }
+    .grid-dot.active {
+      background: #fff;
+      box-shadow: 0 0 6px rgba(255,255,255,0.8);
+      animation: blink 0.5s ease-in-out infinite;
+    }
+
+    /* Dashboard preview */
+    .dashboard {
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 320px;
+    }
+    .stats-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+    .stats-bar span { color: #333; }
+    .dashboard-device {
+      background: linear-gradient(180deg, #f5f5f5 0%, #e5e5e5 100%);
+      border: 1px solid #d4d4d4;
+      border-radius: 20px;
+      padding: 12px;
+      margin: 0 auto;
+      width: fit-content;
+    }
+    .dashboard-bezel {
+      background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .dashboard-screen {
+      background: #111;
+      border-radius: 10px;
+      width: 160px;
+      height: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      margin-top: 8px;
+    }
+    .toggle {
+      width: 24px;
+      height: 44px;
+      background: #d4d4d4;
+      border-radius: 12px;
+      position: relative;
+    }
+    .toggle-knob {
+      width: 20px;
+      height: 20px;
+      background: #555;
+      border-radius: 50%;
+      position: absolute;
+      left: 2px;
+      top: 4px;
+    }
+    .speaker {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      width: 40px;
+    }
+    .speaker-dot {
+      width: 6px;
+      height: 6px;
+      background: #aaa;
+      border-radius: 50%;
+    }
+    .dial {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(180deg, #e5e5e5 0%, #ccc 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 0 #aaa;
+    }
+    .play-icon {
+      width: 0;
+      height: 0;
+      border-left: 8px solid #555;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      margin-left: 2px;
+    }
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .btn {
+      padding: 8px 16px;
+      font-size: 11px;
+      border-radius: 20px;
+      border: 1px solid #ddd;
+      background: #fff;
+      color: #555;
+    }
+    .btn.primary {
+      background: #222;
+      color: #fff;
+      border: none;
+    }
+    .current-op {
+      text-align: center;
+      margin-top: 16px;
+    }
+    .current-op-label {
+      font-size: 10px;
+      color: #aaa;
+    }
+    .current-op-value {
+      font-size: 14px;
+      font-family: monospace;
+      color: #22c55e;
+    }
+
+    /* Legend */
+    .legend {
+      background: #f5f5f5;
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 600px;
+      margin: 0 auto;
+      font-size: 13px;
+    }
+    .legend h3 {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 12px;
+    }
+    .legend-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      color: #666;
+    }
+    .legend-grid div { display: flex; align-items: center; gap: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Ghost in the Machine</h1>
+  <p class="subtitle">All UI States & Health Conditions</p>
+
+  <!-- Section 1: Health States -->
+  <div class="section">
+    <h2 class="section-title">1. Ghost Health States</h2>
+    <div class="states-row">
+
+      <!-- HEALTHY -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost computing" width="70" height="76" viewBox="0 0 92 100">
+                <!-- Sparkles -->
+                <rect class="sparkle" x="10" y="0" width="4" height="4" fill="#fff"/>
+                <rect class="sparkle" x="32" y="0" width="4" height="4" fill="#fff"/>
+                <rect class="sparkle" x="54" y="0" width="4" height="4" fill="#fff"/>
+                <rect class="sparkle" x="76" y="0" width="4" height="4" fill="#fff"/>
+                <!-- Body -->
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3"/>
+                <!-- Eyes -->
+                <rect x="28" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="52" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="31" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.7"/>
+                <rect x="55" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.7"/>
+                <!-- Smile -->
+                <path d="M 38 50 Q 46 58, 54 50" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <!-- Blush -->
+                <ellipse cx="24" cy="45" rx="6" ry="3" fill="#ffaaaa" opacity="0.4"/>
+                <ellipse cx="68" cy="45" rx="6" ry="3" fill="#ffaaaa" opacity="0.4"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">HEALTHY</div>
+        <div class="sublabel">All systems nominal</div>
+        <div class="metrics">temp&lt;65 · l1&lt;75</div>
+      </div>
+
+      <!-- TIRED -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost" width="70" height="76" viewBox="0 0 92 100">
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3"/>
+                <!-- Droopy eyes -->
+                <rect x="28" y="32" width="12" height="6" rx="1" fill="#333"/>
+                <rect x="52" y="32" width="12" height="6" rx="1" fill="#333"/>
+                <rect x="28" y="28" width="12" height="4" rx="1" fill="#ddd"/>
+                <rect x="52" y="28" width="12" height="4" rx="1" fill="#ddd"/>
+                <!-- Flat mouth -->
+                <line x1="40" y1="52" x2="52" y2="52" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">TIRED</div>
+        <div class="sublabel">Low utilization</div>
+        <div class="metrics">util &lt; 50%</div>
+      </div>
+
+      <!-- SICK -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost" width="70" height="76" viewBox="0 0 92 100">
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3" opacity="0.95"/>
+                <!-- Spiral eyes -->
+                <g class="dizzy-eye left" style="transform-origin: 34px 33px">
+                  <circle cx="34" cy="33" r="6" fill="none" stroke="#333" stroke-width="2" stroke-dasharray="4 2"/>
+                </g>
+                <g class="dizzy-eye right" style="transform-origin: 58px 33px">
+                  <circle cx="58" cy="33" r="6" fill="none" stroke="#333" stroke-width="2" stroke-dasharray="4 2"/>
+                </g>
+                <!-- Weak smile -->
+                <path d="M 38 52 Q 46 58, 54 52" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+                <!-- Zzz -->
+                <text x="46" y="88" text-anchor="middle" font-size="14" class="warning">💤</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">SICK</div>
+        <div class="sublabel">Memory pressure</div>
+        <div class="metrics">temp&gt;65 OR l1&gt;75</div>
+      </div>
+
+      <!-- CRITICAL -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost" width="70" height="76" viewBox="0 0 92 100">
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3" opacity="0.9"/>
+                <!-- Fast spiral eyes -->
+                <g class="dizzy-eye fast left" style="transform-origin: 34px 33px">
+                  <circle cx="34" cy="33" r="6" fill="none" stroke="#333" stroke-width="2" stroke-dasharray="4 2"/>
+                </g>
+                <g class="dizzy-eye fast right" style="transform-origin: 58px 33px">
+                  <circle cx="58" cy="33" r="6" fill="none" stroke="#333" stroke-width="2" stroke-dasharray="4 2"/>
+                </g>
+                <!-- Worried frown -->
+                <path d="M 38 55 Q 46 48, 54 55" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <!-- Warning -->
+                <text x="46" y="88" text-anchor="middle" font-size="14" class="warning">⚠️</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">CRITICAL</div>
+        <div class="sublabel">Overheating!</div>
+        <div class="metrics">temp&gt;70 OR l1&gt;85</div>
+      </div>
+
+      <!-- DEAD -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost dead" width="70" height="76" viewBox="0 0 92 100">
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#666" stroke="#222" stroke-width="3" opacity="0.5"/>
+                <!-- X eyes -->
+                <line x1="30" y1="28" x2="38" y2="38" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+                <line x1="38" y1="28" x2="30" y2="38" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+                <line x1="54" y1="28" x2="62" y2="38" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+                <line x1="62" y1="28" x2="54" y2="38" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+                <!-- Flat line -->
+                <line x1="38" y1="52" x2="54" y2="52" stroke="#333" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">DEAD</div>
+        <div class="sublabel">System failure</div>
+        <div class="metrics">temp&gt;75 AND l1&gt;90</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Temperature Effects -->
+  <div class="section">
+    <h2 class="section-title">2. Temperature Effects (Red Eyes + Sweat when hot)</h2>
+    <div class="states-row">
+
+      <!-- COOL -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost" width="70" height="76" viewBox="0 0 92 100">
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3"/>
+                <rect x="28" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="52" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="31" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.7"/>
+                <rect x="55" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.7"/>
+                <path d="M 38 50 Q 46 58, 54 50" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <ellipse cx="24" cy="45" rx="6" ry="3" fill="#ffaaaa" opacity="0.4"/>
+                <ellipse cx="68" cy="45" rx="6" ry="3" fill="#ffaaaa" opacity="0.4"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">COOL</div>
+        <div class="sublabel">Normal eyes + blush</div>
+        <div class="metrics">45°C</div>
+      </div>
+
+      <!-- HOT -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost computing" width="70" height="76" viewBox="0 0 92 100">
+                <!-- Sweat drops -->
+                <rect class="sweat1" x="28" y="12" width="4" height="6" rx="2" fill="#888"/>
+                <rect class="sweat2" x="44" y="12" width="4" height="6" rx="2" fill="#888"/>
+                <rect class="sweat3" x="60" y="12" width="4" height="6" rx="2" fill="#888"/>
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3"/>
+                <!-- RED eyes -->
+                <rect x="28" y="28" width="12" height="14" rx="2" fill="#ff4444"/>
+                <rect x="52" y="28" width="12" height="14" rx="2" fill="#ff4444"/>
+                <rect x="31" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.3"/>
+                <rect x="55" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.3"/>
+                <path d="M 38 50 Q 46 58, 54 50" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">HOT</div>
+        <div class="sublabel">Red eyes + sweating</div>
+        <div class="metrics">70°C</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: L1 Memory / Belly -->
+  <div class="section">
+    <h2 class="section-title">3. L1 SRAM Usage (Belly grows with usage)</h2>
+    <div class="states-row">
+
+      <!-- LOW -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost" width="70" height="76" viewBox="0 0 92 100">
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3"/>
+                <rect x="28" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="52" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <path d="M 38 50 Q 46 58, 54 50" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">EMPTY</div>
+        <div class="sublabel">Flat belly</div>
+        <div class="metrics">L1: 20%</div>
+      </div>
+
+      <!-- HIGH -->
+      <div class="state-card">
+        <div class="device">
+          <div class="screen-bezel">
+            <div class="screen">
+              <svg class="ghost computing" width="70" height="76" viewBox="0 0 92 100">
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3"/>
+                <!-- Belly bulge -->
+                <ellipse cx="46" cy="55" rx="14" ry="9" fill="rgba(200,200,200,0.5)" stroke="rgba(150,150,150,0.5)" stroke-width="1"/>
+                <rect x="28" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="52" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <path d="M 38 50 Q 46 58, 54 50" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="label">FULL</div>
+        <div class="sublabel">Bloated belly</div>
+        <div class="metrics">L1: 85%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Core Grid -->
+  <div class="section">
+    <h2 class="section-title">4. Core Activity Grid (Exact Core Mapping)</h2>
+    <div class="states-row">
+
+      <div class="state-card">
+        <div class="grid-container">
+          <div class="grid">
+            <div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+          </div>
+        </div>
+        <div class="label">matmul</div>
+        <div class="sublabel">cores: [0,0] [1,1] [2,2]</div>
+      </div>
+
+      <div class="state-card">
+        <div class="grid-container">
+          <div class="grid">
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot active"></div><div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot active"></div><div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+          </div>
+        </div>
+        <div class="label">softmax</div>
+        <div class="sublabel">cores: [3,3] [3,4] [4,3] [4,4]</div>
+      </div>
+
+      <div class="state-card">
+        <div class="grid-container">
+          <div class="grid">
+            <div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot active"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot active"></div><div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot active"></div><div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+            <div class="grid-dot active"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot active"></div>
+          </div>
+        </div>
+        <div class="label">broadcast</div>
+        <div class="sublabel">corners + center</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: Full Dashboard -->
+  <div class="section">
+    <h2 class="section-title">5. Full Dashboard Layout</h2>
+    <div class="states-row">
+      <div class="dashboard">
+        <div class="stats-bar">
+          <div>SRAM: <span>65%</span></div>
+          <div>TEMP: <span>52°C</span></div>
+          <div>POWER: <span>85W</span></div>
+        </div>
+
+        <div class="dashboard-device">
+          <div class="dashboard-bezel">
+            <div class="dashboard-screen">
+              <svg class="ghost computing" width="80" height="86" viewBox="0 0 92 100">
+                <rect class="sparkle" x="10" y="0" width="4" height="4" fill="#fff"/>
+                <rect class="sparkle" x="32" y="0" width="4" height="4" fill="#fff"/>
+                <rect class="sparkle" x="54" y="0" width="4" height="4" fill="#fff"/>
+                <rect class="sparkle" x="76" y="0" width="4" height="4" fill="#fff"/>
+                <path d="M 16 40 Q 16 10, 46 10 Q 76 10, 76 40 L 76 70 L 68 65 L 60 72 L 52 65 L 46 72 L 40 65 L 32 72 L 24 65 L 16 70 Z" fill="#fff" stroke="#222" stroke-width="3"/>
+                <ellipse cx="46" cy="55" rx="12" ry="7" fill="rgba(200,200,200,0.4)"/>
+                <rect x="28" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="52" y="28" width="12" height="14" rx="2" fill="#333"/>
+                <rect x="31" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.7"/>
+                <rect x="55" y="31" width="4" height="4" rx="1" fill="#fff" opacity="0.7"/>
+                <path d="M 38 50 Q 46 58, 54 50" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <ellipse cx="24" cy="45" rx="6" ry="3" fill="#ffaaaa" opacity="0.4"/>
+                <ellipse cx="68" cy="45" rx="6" ry="3" fill="#ffaaaa" opacity="0.4"/>
+              </svg>
+            </div>
+          </div>
+          <div class="controls">
+            <div class="toggle"><div class="toggle-knob"></div></div>
+            <div class="speaker">
+              <div class="speaker-dot"></div><div class="speaker-dot"></div><div class="speaker-dot"></div><div class="speaker-dot"></div>
+              <div class="speaker-dot"></div><div class="speaker-dot"></div><div class="speaker-dot"></div><div class="speaker-dot"></div>
+              <div class="speaker-dot"></div><div class="speaker-dot"></div><div class="speaker-dot"></div><div class="speaker-dot"></div>
+            </div>
+            <div class="dial"><div class="play-icon"></div></div>
+          </div>
+        </div>
+
+        <div class="buttons">
+          <button class="btn">Load Report</button>
+          <button class="btn primary">▶ Play</button>
+        </div>
+
+        <div class="current-op">
+          <div class="current-op-label">CURRENT OP</div>
+          <div class="current-op-value">matmul</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <h3>Health State Triggers</h3>
+    <div class="legend-grid">
+      <div><span style="color: #22c55e">●</span> Healthy: temp &lt; 65 AND l1 &lt; 75</div>
+      <div><span style="color: #eab308">●</span> Tired: utilization &lt; 50%</div>
+      <div><span style="color: #f97316">●</span> Sick: temp &gt; 65 OR l1 &gt; 75</div>
+      <div><span style="color: #ef4444">●</span> Critical: temp &gt; 70 OR l1 &gt; 85</div>
+      <div><span style="color: #888">●</span> Dead: temp &gt; 75 AND l1 &gt; 90</div>
+    </div>
+
+    <h3 style="margin-top: 20px">Visual Indicators</h3>
+    <div class="legend-grid">
+      <div>🔴 Red eyes = temp &gt; 65°C</div>
+      <div>💧 Sweat drops = overheating</div>
+      <div>😊 Blush = healthy + cool</div>
+      <div>✨ Sparkles = computing</div>
+      <div>🫃 Big belly = high L1 usage</div>
+      <div>😵 Spiral eyes = sick/critical</div>
+    </div>
+  </div>
+
+</body>
+</html>

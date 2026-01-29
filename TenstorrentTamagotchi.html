@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tenstorrent Tamagotchi - Ghost in the Machine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/framer-motion@10.16.4/dist/framer-motion.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      background: #fafafa;
+      min-height: 100vh;
+      font-family: 'Space Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback } = React;
+    const { motion, AnimatePresence } = window.Motion;
+
+    // Health state computation based on telemetry thresholds
+    const computeHealth = (temp, l1Percent, avgUtilization) => {
+      if (temp > 75 && l1Percent > 90) return 'dead';
+      if (temp > 70 || l1Percent > 85) return 'critical';
+      if (temp > 65 || l1Percent > 75) return 'sick';
+      if (avgUtilization < 0.5) return 'tired';
+      return 'healthy';
+    };
+
+    // Mock operation timeline for simulation
+    const mockOpTimeline = [
+      { op_id: 1, name: "embedding", cores: [[0,0], [0,1], [1,0], [1,1], [0,2], [1,2]] },
+      { op_id: 2, name: "matmul", cores: [[2,2], [2,3], [3,2], [3,3], [4,4], [5,5], [4,5], [5,4]] },
+      { op_id: 3, name: "layernorm", cores: [[6,6], [7,7], [8,8], [6,7], [7,8]] },
+      { op_id: 4, name: "attention", cores: [[3,5], [4,6], [5,7], [6,8], [7,9], [8,10]] },
+      { op_id: 5, name: "softmax", cores: [[9,9], [10,10], [11,11], [9,10], [10,11]] },
+      { op_id: 6, name: "ffn", cores: [[0,5], [1,6], [2,7], [3,8], [4,9], [5,10], [6,11]] },
+      { op_id: 7, name: "residual", cores: [[2,0], [3,1], [4,2], [5,3], [6,4], [7,5]] },
+      { op_id: 8, name: "output", cores: [[8,6], [9,7], [10,8], [11,9], [10,9], [11,10]] },
+    ];
+
+    // Ghost SVG Component with health states and belly scaling
+    const Ghost = ({ health, temp, power, computing, l1Usage = 50 }) => {
+      const isOverheating = temp > 65;
+      const pulseDuration = Math.max(0.3, 2 - (power / 150));
+      
+      // Belly expansion based on L1 usage (0 to 8 pixels wider)
+      const bellyExpand = (l1Usage / 100) * 8;
+
+      // Health-based appearance
+      const getGhostStyle = () => {
+        if (health === 'dead') return { fill: '#666', opacity: 0.5 };
+        if (health === 'critical') return { fill: '#fff', opacity: 0.9 };
+        if (health === 'sick') return { fill: '#fff', opacity: 0.95 };
+        if (health === 'tired') return { fill: '#fff', opacity: 1 };
+        return { fill: '#fff', opacity: 1 }; // healthy
+      };
+
+      const style = getGhostStyle();
+
+      // Sweat drops for overheating
+      const SweatDrops = () => (
+        <g>
+          {[0, 1, 2].map((i) => (
+            <motion.rect
+              key={i}
+              x={28 + i * 20}
+              y={15}
+              width="4"
+              height="6"
+              rx="2"
+              fill="#888"
+              initial={{ opacity: 0, y: 0 }}
+              animate={{ opacity: [0, 0.8, 0.8, 0], y: [0, 8, 12, 18] }}
+              transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.2 }}
+            />
+          ))}
+        </g>
+      );
+
+      // X eyes for dead state
+      const DeadEyes = () => (
+        <g stroke="#333" strokeWidth="3" strokeLinecap="round">
+          <line x1="30" y1="28" x2="38" y2="38" />
+          <line x1="38" y1="28" x2="30" y2="38" />
+          <line x1="54" y1="28" x2="62" y2="38" />
+          <line x1="62" y1="28" x2="54" y2="38" />
+        </g>
+      );
+
+      // Dizzy spiral eyes for sick/critical
+      const DizzyEyes = ({ speed = 2 }) => (
+        <g>
+          <motion.g
+            animate={{ rotate: 360 }}
+            transition={{ duration: speed, repeat: Infinity, ease: 'linear' }}
+            style={{ transformOrigin: '34px 33px' }}
+          >
+            <circle cx="34" cy="33" r="6" fill="none" stroke="#333" strokeWidth="2" strokeDasharray="4 2" />
+          </motion.g>
+          <motion.g
+            animate={{ rotate: -360 }}
+            transition={{ duration: speed, repeat: Infinity, ease: 'linear' }}
+            style={{ transformOrigin: '58px 33px' }}
+          >
+            <circle cx="58" cy="33" r="6" fill="none" stroke="#333" strokeWidth="2" strokeDasharray="4 2" />
+          </motion.g>
+        </g>
+      );
+
+      // Tired droopy eyes
+      const TiredEyes = () => (
+        <g>
+          <rect x="28" y="32" width="12" height="6" rx="1" fill="#333" />
+          <rect x="52" y="32" width="12" height="6" rx="1" fill="#333" />
+          {/* Droopy eyelids */}
+          <rect x="28" y="28" width="12" height="4" rx="1" fill="#ddd" />
+          <rect x="52" y="28" width="12" height="4" rx="1" fill="#ddd" />
+        </g>
+      );
+
+      // Normal/computing eyes
+      const NormalEyes = ({ red = false }) => (
+        <g>
+          <motion.rect
+            x="28"
+            y="28"
+            width="12"
+            height="14"
+            rx="2"
+            fill={red ? '#ff4444' : '#333'}
+            animate={red ? { fill: ['#ff4444', '#ff6666', '#ff4444'] } : {}}
+            transition={{ duration: 0.5, repeat: Infinity }}
+          />
+          <motion.rect
+            x="52"
+            y="28"
+            width="12"
+            height="14"
+            rx="2"
+            fill={red ? '#ff4444' : '#333'}
+            animate={red ? { fill: ['#ff4444', '#ff6666', '#ff4444'] } : {}}
+            transition={{ duration: 0.5, repeat: Infinity }}
+          />
+          {/* Highlights */}
+          <rect x="31" y="31" width="4" height="4" rx="1" fill="#fff" opacity={red ? 0.3 : 0.7} />
+          <rect x="55" y="31" width="4" height="4" rx="1" fill="#fff" opacity={red ? 0.3 : 0.7} />
+        </g>
+      );
+
+      // Pink blush marks for healthy + cool
+      const Blush = () => (
+        <g>
+          <ellipse cx="22" cy="42" rx="6" ry="4" fill="#ffb6c1" opacity="0.6" />
+          <ellipse cx="70" cy="42" rx="6" ry="4" fill="#ffb6c1" opacity="0.6" />
+        </g>
+      );
+
+      // Sparkles when computing
+      const Sparkles = () => (
+        <g>
+          {[
+            { x: 12, y: 20, delay: 0 },
+            { x: 78, y: 25, delay: 0.3 },
+            { x: 8, y: 55, delay: 0.6 },
+            { x: 82, y: 50, delay: 0.9 },
+            { x: 46, y: 5, delay: 0.15 },
+          ].map((spark, i) => (
+            <motion.g key={i}>
+              <motion.path
+                d={`M ${spark.x} ${spark.y - 4} L ${spark.x} ${spark.y + 4} M ${spark.x - 4} ${spark.y} L ${spark.x + 4} ${spark.y}`}
+                stroke="#ffd700"
+                strokeWidth="2"
+                strokeLinecap="round"
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ 
+                  opacity: [0, 1, 1, 0], 
+                  scale: [0.5, 1.2, 1, 0.5],
+                  rotate: [0, 45, 0]
+                }}
+                transition={{ 
+                  duration: 1.2, 
+                  repeat: Infinity, 
+                  delay: spark.delay,
+                  ease: "easeInOut"
+                }}
+                style={{ transformOrigin: `${spark.x}px ${spark.y}px` }}
+              />
+            </motion.g>
+          ))}
+        </g>
+      );
+
+      // Mouth variations
+      const getMouth = () => {
+        if (health === 'dead') {
+          return <line x1="38" y1="52" x2="54" y2="52" stroke="#333" strokeWidth="3" strokeLinecap="round" />;
+        }
+        if (health === 'critical') {
+          return (
+            <motion.path
+              d="M 38 55 Q 46 48, 54 55"
+              stroke="#333"
+              strokeWidth="3"
+              fill="none"
+              strokeLinecap="round"
+              animate={{ d: ['M 38 55 Q 46 48, 54 55', 'M 38 53 Q 46 46, 54 53', 'M 38 55 Q 46 48, 54 55'] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+            />
+          );
+        }
+        if (health === 'sick') {
+          return <path d="M 38 52 Q 46 58, 54 52" stroke="#333" strokeWidth="3" fill="none" strokeLinecap="round" style={{ opacity: 0.7 }} />;
+        }
+        if (health === 'tired') {
+          return <path d="M 40 52 L 52 52" stroke="#333" strokeWidth="3" strokeLinecap="round" />;
+        }
+        // Healthy/computing - happy
+        return (
+          <motion.path
+            d="M 38 50 Q 46 58, 54 50"
+            stroke="#333"
+            strokeWidth="3"
+            fill="none"
+            strokeLinecap="round"
+            animate={computing ? { d: ['M 38 50 Q 46 58, 54 50', 'M 40 52 Q 46 56, 52 52', 'M 38 50 Q 46 58, 54 50'] } : {}}
+            transition={{ duration: 0.3, repeat: Infinity }}
+          />
+        );
+      };
+
+      // Get eyes based on state
+      const getEyes = () => {
+        if (health === 'dead') return <DeadEyes />;
+        if (health === 'critical') return <DizzyEyes speed={1} />;
+        if (health === 'sick') return <DizzyEyes speed={3} />;
+        if (health === 'tired') return <TiredEyes />;
+        return <NormalEyes red={isOverheating} />;
+      };
+
+      return (
+        <motion.svg
+          width="92"
+          height="100"
+          viewBox="0 0 92 100"
+          animate={computing && health === 'healthy' ? { x: [-1, 1, -1, 1, 0] } : health === 'dead' ? {} : { y: [-1, 1, -1] }}
+          transition={computing ? { duration: 0.1, repeat: Infinity } : { duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          {/* Ghost body with pulse */}
+          <motion.g
+            animate={health !== 'dead' ? { scale: [1, 1.02, 1] } : {}}
+            transition={{ duration: pulseDuration, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ transformOrigin: '46px 50px' }}
+          >
+            {/* Main body - expands with L1 usage */}
+            <motion.path
+              d={`
+                M ${16 - bellyExpand} 40
+                Q ${16 - bellyExpand} 10, 46 10
+                Q ${76 + bellyExpand} 10, ${76 + bellyExpand} 40
+                L ${76 + bellyExpand} 70
+                L ${68 + bellyExpand * 0.5} 65
+                L ${60 + bellyExpand * 0.3} 72
+                L 52 65
+                L 46 72
+                L 40 65
+                L ${32 - bellyExpand * 0.3} 72
+                L ${24 - bellyExpand * 0.5} 65
+                L ${16 - bellyExpand} 70
+                Z
+              `}
+              fill={style.fill}
+              stroke="#222"
+              strokeWidth="3"
+              opacity={style.opacity}
+            />
+
+            {/* Belly bulge indicator when L1 is high */}
+            {l1Usage > 50 && (
+              <ellipse 
+                cx="46" 
+                cy="55" 
+                rx={10 + (l1Usage / 100) * 6} 
+                ry={6 + (l1Usage / 100) * 4} 
+                fill="rgba(200,200,200,0.4)" 
+                stroke="rgba(150,150,150,0.3)" 
+                strokeWidth="1"
+              />
+            )}
+
+            {/* Body highlight */}
+            <ellipse cx="32" cy="35" rx="8" ry="12" fill="#fff" opacity="0.3" />
+          </motion.g>
+
+          {/* Eyes */}
+          {getEyes()}
+
+          {/* Mouth */}
+          {getMouth()}
+
+          {/* Sweat drops when overheating */}
+          {isOverheating && health !== 'dead' && <SweatDrops />}
+
+          {/* Pink blush marks for healthy + cool state */}
+          {health === 'healthy' && !isOverheating && <Blush />}
+
+          {/* Golden sparkles when computing */}
+          {computing && (health === 'healthy' || health === 'tired') && <Sparkles />}
+
+          {/* Sick/critical warning indicator */}
+          {(health === 'sick' || health === 'critical') && (
+            <motion.text
+              x="46"
+              y="90"
+              textAnchor="middle"
+              fontSize="16"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 0.5, repeat: Infinity }}
+            >
+              {health === 'critical' ? '⚠' : '💤'}
+            </motion.text>
+          )}
+        </motion.svg>
+      );
+    };
+
+    // Speaker Grille Component
+    const SpeakerGrille = () => (
+      <div className="flex flex-wrap gap-1 w-16 justify-center">
+        {[...Array(20)].map((_, i) => (
+          <div key={i} className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
+        ))}
+      </div>
+    );
+
+    // Toggle Switch Component
+    const ToggleSwitch = ({ on, onToggle }) => (
+      <div
+        className="relative w-8 h-14 bg-neutral-300 rounded-full cursor-pointer shadow-inner"
+        onClick={onToggle}
+      >
+        <motion.div
+          className="absolute left-1 w-6 h-6 bg-neutral-700 rounded-full shadow-md"
+          animate={{ top: on ? 6 : 30 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        />
+      </div>
+    );
+
+    // Dial Button Component
+    const DialButton = ({ icon, onClick }) => (
+      <motion.button
+        className="w-14 h-14 rounded-full bg-gradient-to-b from-neutral-200 to-neutral-300 shadow-lg flex items-center justify-center border-4 border-neutral-300"
+        style={{
+          boxShadow: '0 4px 0 #a3a3a3, 0 6px 8px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.5)'
+        }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95, y: 2 }}
+        onClick={onClick}
+      >
+        {icon}
+      </motion.button>
+    );
+
+    // Enhanced Grid Dot Component with active core highlighting
+    const GridDot = ({ active, isCore }) => (
+      <motion.div
+        className={`w-4 h-4 rounded-sm transition-all duration-200 ${
+          isCore ? 'bg-cyan-400' : active ? 'bg-neutral-300' : 'bg-neutral-800'
+        }`}
+        style={{
+          boxShadow: isCore 
+            ? '0 0 12px rgba(34,211,238,0.9), 0 0 4px rgba(34,211,238,1)' 
+            : active 
+              ? '0 0 4px rgba(200,200,200,0.5)' 
+              : 'none'
+        }}
+        animate={isCore ? { 
+          opacity: [0.8, 1, 0.8],
+          scale: [1, 1.1, 1]
+        } : {}}
+        transition={isCore ? { duration: 0.4, repeat: Infinity } : {}}
+      />
+    );
+
+    // Main Tamagotchi Component
+    function TenstorrentTamagotchi({ 
+      temp = 45, 
+      power = 50, 
+      l1Usage = 30, 
+      computing = false, 
+      health = 'healthy',
+      opTimeline = mockOpTimeline,
+      opIndex = 0,
+      onTogglePlay = () => {},
+      showGhost = true,
+      onToggleGhost = () => {}
+    }) {
+      // Grid configuration (12x12 Torus)
+      const gridSize = 12;
+
+      // Get current operation's active cores
+      const currentOp = opTimeline[opIndex] || opTimeline[0];
+      const activeCores = currentOp?.cores || [];
+
+      // Check if a grid position is an active core
+      const isCoreActive = useCallback((row, col) => {
+        return activeCores.some(([r, c]) => r === row && c === col);
+      }, [activeCores]);
+
+      // Ghost pattern based on health (simplified - just show cores when computing)
+      const ghostPatterns = {
+        healthy: [
+          [0,0,0,0,1,1,1,1,0,0,0,0],
+          [0,0,0,1,1,1,1,1,1,0,0,0],
+          [0,0,1,1,1,1,1,1,1,1,0,0],
+          [0,1,1,0,0,1,1,0,0,1,1,0],
+          [0,1,1,0,0,1,1,0,0,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,0,1,1,0,0,1,1,0,1,0],
+          [0,0,0,0,1,0,0,1,0,0,0,0],
+          [0,0,0,0,0,0,0,0,0,0,0,0],
+        ],
+        tired: [
+          [0,0,0,0,1,1,1,1,0,0,0,0],
+          [0,0,0,1,1,1,1,1,1,0,0,0],
+          [0,0,1,1,1,1,1,1,1,1,0,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,0,0,0,1,1,0,0,0,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,0,0,0,0,1,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,0,1,1,0,0,1,1,0,1,0],
+          [0,0,0,0,1,0,0,1,0,0,0,0],
+          [0,0,0,0,0,0,0,0,0,0,0,0],
+        ],
+        sick: [
+          [0,0,0,0,1,1,1,1,0,0,0,0],
+          [0,0,0,1,1,1,1,1,1,0,0,0],
+          [0,0,1,1,1,1,1,1,1,1,0,0],
+          [0,1,0,1,0,1,1,0,1,0,1,0],
+          [0,1,1,0,1,1,1,1,0,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,0,1,1,1,1,0,1,1,0],
+          [0,1,1,1,1,0,0,1,1,1,1,0],
+          [0,1,0,1,1,0,0,1,1,0,1,0],
+          [0,0,0,0,1,0,0,1,0,0,0,0],
+          [0,0,0,0,0,0,0,0,0,0,0,0],
+        ],
+        critical: [
+          [0,0,0,0,1,1,1,1,0,0,0,0],
+          [0,0,0,1,1,1,1,1,1,0,0,0],
+          [0,0,1,1,1,1,1,1,1,1,0,0],
+          [0,1,1,0,1,1,1,1,0,1,1,0],
+          [0,1,1,1,0,1,1,0,1,1,1,0],
+          [0,1,1,0,1,1,1,1,0,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,0,0,0,0,1,1,1,0],
+          [0,1,1,0,1,1,1,1,0,1,1,0],
+          [0,1,0,1,1,0,0,1,1,0,1,0],
+          [0,0,0,0,1,0,0,1,0,0,0,0],
+          [0,0,0,0,0,0,0,0,0,0,0,0],
+        ],
+        dead: [
+          [0,0,0,0,1,1,1,1,0,0,0,0],
+          [0,0,0,1,1,1,1,1,1,0,0,0],
+          [0,0,1,1,1,1,1,1,1,1,0,0],
+          [0,1,1,0,1,1,1,1,0,1,1,0],
+          [0,1,1,1,0,1,1,0,1,1,1,0],
+          [0,1,1,1,0,1,1,0,1,1,1,0],
+          [0,1,1,0,1,1,1,1,0,1,1,0],
+          [0,1,1,1,1,1,1,1,1,1,1,0],
+          [0,1,1,1,0,0,0,0,1,1,1,0],
+          [0,1,0,1,1,0,0,1,1,0,1,0],
+          [0,0,0,0,1,0,0,1,0,0,0,0],
+          [0,0,0,0,0,0,0,0,0,0,0,0],
+        ],
+      };
+
+      const gridPattern = ghostPatterns[health] || ghostPatterns.healthy;
+
+      return (
+        <div className="flex flex-col items-center">
+          {/* Tamagotchi Device */}
+          <div
+            className="relative rounded-3xl p-3"
+            style={{
+              background: 'linear-gradient(180deg, #f5f5f5 0%, #e5e5e5 100%)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.8), inset 0 -2px 0 rgba(0,0,0,0.05)',
+              border: '1px solid #d4d4d4',
+            }}
+          >
+            {/* Screen Area */}
+            <div
+              className="rounded-2xl p-3 mb-4"
+              style={{
+                background: 'linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%)',
+                boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.8)',
+              }}
+            >
+              {/* LCD Screen */}
+              <div
+                className="relative overflow-hidden rounded-lg"
+                style={{
+                  background: '#111',
+                  width: '228px',
+                  height: '228px',
+                }}
+              >
+                {/* Grid with core activity overlay */}
+                <div className="absolute inset-0 p-3 grid grid-cols-12 gap-0.5">
+                  {gridPattern.flat().map((active, idx) => {
+                    const row = Math.floor(idx / 12);
+                    const col = idx % 12;
+                    const isCore = computing && isCoreActive(row, col);
+                    // When showGhost is false, don't show the ghost pattern
+                    const showActive = showGhost ? active : false;
+                    return (
+                      <GridDot key={idx} active={showActive} isCore={isCore} />
+                    );
+                  })}
+                </div>
+
+                {/* Scanline effect */}
+                <div
+                  className="absolute inset-0 pointer-events-none opacity-5"
+                  style={{
+                    background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Control Area */}
+            <div className="flex items-center justify-between px-4 py-2">
+              {/* Toggle Switch - Ghost/Grid view */}
+              <ToggleSwitch on={showGhost} onToggle={onToggleGhost} />
+
+              {/* Speaker Grille */}
+              <SpeakerGrille />
+
+              {/* Dial Button - Play/Pause */}
+              <DialButton
+                onClick={onTogglePlay}
+                icon={
+                  computing ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="6" y="4" width="4" height="16" rx="1" />
+                      <rect x="14" y="4" width="4" height="16" rx="1" />
+                    </svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="5,3 19,12 5,21" />
+                    </svg>
+                  )
+                }
+              />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Lexicon Modal Component
+    const Lexicon = ({ isOpen, onClose }) => {
+      if (!isOpen) return null;
+
+      const glossary = {
+        "The \"Silicon Soul\" (Hardware Terms)": [
+          {
+            term: "Tensix Core",
+            definition: "The fundamental building block of Tenstorrent's AI processors. Each core contains five \"baby\" RISC-V processors, a compute engine for math, and its own local memory."
+          },
+          {
+            term: "RISC-V (\"Baby Cores\")",
+            definition: "The open-source instruction set architecture (ISA) Tenstorrent uses. Inside each Tensix core, these five small processors manage the \"to-do list\": two move data in and out, while three drive the math operations."
+          },
+          {
+            term: "L1 SRAM (On-Chip Memory)",
+            definition: "High-speed, local memory (approx. 1MB–1.5MB) located directly inside each Tensix core. It is much faster than standard DRAM because data doesn't have to leave the chip to be processed."
+          },
+          {
+            term: "2D Torus Network (NoC)",
+            definition: "The \"highway system\" on the chip. Unlike a simple grid (mesh), a torus connects opposite edges together (top to bottom, left to right), allowing data to take \"shortcuts\" across the chip."
+          },
+          {
+            term: "Wormhole & Blackhole",
+            definition: "The names of Tenstorrent's chip generations. Wormhole is their current flagship for developers, while Blackhole is their next-generation, higher-power chip designed for massive AI clusters."
+          }
+        ],
+        "The \"Mood Engine\" (Telemetry & Tools)": [
+          {
+            term: "Telemetry",
+            definition: "Real-time data about the hardware's \"health,\" such as its temperature, power usage, and how hard the processors are working."
+          },
+          {
+            term: "tt-smi (System Management Interface)",
+            definition: "The command-line tool used to \"check the pulse\" of the hardware. It provides the raw numbers for your Ghost's heartbeat (power) and stress level (temp)."
+          },
+          {
+            term: "TT-NN Visualizer",
+            definition: "A diagnostic tool that creates \"reports\" on how an AI model is moving through the chip. You can use these reports as the \"script\" for your Ghost's animations."
+          },
+          {
+            term: "SRAM Utilization",
+            definition: "A metric showing how much of that fast L1 memory is currently \"full\" of data. In your prototype, this determines if the Ghost looks \"stuffed\" or bloated."
+          }
+        ],
+        "Developer Tooling": [
+          {
+            term: "TT-Metalium",
+            definition: "The \"low-level\" SDK for developers who want to write custom code directly for the hardware (bare-metal)."
+          },
+          {
+            term: "TT-NN",
+            definition: "The \"high-level\" Python library that feels like PyTorch, making it easy for AI researchers to run models on Tenstorrent without needing to be hardware experts."
+          }
+        ]
+      };
+
+      return (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+                <div>
+                  <h2 className="text-lg font-bold text-neutral-900">Lexicon</h2>
+                  <p className="text-xs text-neutral-400 mt-0.5">Ghost in the Machine Glossary</p>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M1 1L13 13M1 13L13 1" stroke="#666" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-4 overflow-y-auto max-h-[calc(80vh-80px)]">
+                {Object.entries(glossary).map(([section, terms], sectionIdx) => (
+                  <div key={section} className={sectionIdx > 0 ? "mt-6" : ""}>
+                    <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">
+                      {section}
+                    </h3>
+                    <div className="space-y-3">
+                      {terms.map((item, idx) => (
+                        <div key={idx} className="bg-neutral-50 rounded-xl p-4">
+                          <div className="font-mono text-sm font-bold text-neutral-900 mb-1">
+                            {item.term}
+                          </div>
+                          <div className="text-sm text-neutral-600 leading-relaxed">
+                            {item.definition}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
+      );
+    };
+
+    // About Modal Component
+    const About = ({ isOpen, onClose }) => {
+      if (!isOpen) return null;
+
+      return (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={onClose}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">
+                <h2 className="text-lg font-bold text-neutral-900">About</h2>
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M1 1L13 13M1 13L13 1" stroke="#666" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-6">
+                <h1 className="text-2xl font-bold text-neutral-900 mb-4">"Ghost in the Machine"</h1>
+                
+                <p className="text-sm text-neutral-600 leading-relaxed mb-4">
+                  A machine health interface for <strong className="text-neutral-900">Tenstorrent's Tensix cores telemetry data</strong> to show performance of the hardware. Translating raw tt-smi telemetry (<a href="https://github.com/tenstorrent/ttnn-visualizer" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 underline">ttnn-visualizer</a>) into a visual language for a wider audience to understand how hardware works, effectively 'humanizing' the silicon.
+                </p>
+
+                <p className="text-sm text-neutral-600 leading-relaxed">
+                  The prototype is a React component styled like a retro 8-bit Tamagotchi in a minimal web-based system health dashboard. Instead of showing standard hardware graphs, it uses a 'ghost' character (the silicon soul essentially) whose mood and animations are directly mapped to real-time Tenstorrent telemetry data.
+                </p>
+
+                <div className="mt-6 pt-4 border-t border-neutral-100">
+                  <div className="flex items-center gap-2 text-xs text-neutral-400">
+                    <span>Made by</span>
+                    <a 
+                      href="https://x.com/mmazco" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-neutral-600 hover:text-neutral-900 transition-colors"
+                    >
+                      @mmazco
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
+      );
+    };
+
+    // Demo App with controls
+    function App() {
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [temp, setTemp] = useState(52);
+      const [power, setPower] = useState(85);
+      const [l1Usage, setL1Usage] = useState(50);
+      const [utilization, setUtilization] = useState(0.78);
+      const [opIndex, setOpIndex] = useState(0);
+      const [autoHealth, setAutoHealth] = useState(true);
+      const [manualHealth, setManualHealth] = useState('healthy');
+      const [lexiconOpen, setLexiconOpen] = useState(false);
+      const [aboutOpen, setAboutOpen] = useState(false);
+      const [showGhost, setShowGhost] = useState(true);
+
+      // Auto-compute health from sliders
+      const computedHealth = useMemo(() => 
+        computeHealth(temp, l1Usage, utilization),
+        [temp, l1Usage, utilization]
+      );
+
+      const health = autoHealth ? computedHealth : manualHealth;
+      const currentOp = mockOpTimeline[opIndex];
+
+      // Timeline playback
+      useEffect(() => {
+        if (!isPlaying) return;
+        const interval = setInterval(() => {
+          setOpIndex(prev => (prev + 1) % mockOpTimeline.length);
+        }, 500);
+        return () => clearInterval(interval);
+      }, [isPlaying]);
+
+      // Reset function
+      const handleRestart = () => {
+        setTemp(52);
+        setPower(85);
+        setL1Usage(50);
+        setUtilization(0.78);
+        setOpIndex(0);
+        setIsPlaying(false);
+        setAutoHealth(true);
+      };
+
+      return (
+        <div className="min-h-screen bg-neutral-50 flex flex-col items-center py-12 px-4 relative">
+          {/* About Button (Left) */}
+          <button
+            onClick={() => setAboutOpen(true)}
+            className="fixed top-4 left-4 px-4 py-2 rounded-full bg-white border border-neutral-200 text-neutral-600 text-sm font-mono hover:bg-neutral-50 hover:border-neutral-300 transition-all shadow-sm z-40"
+          >
+            About
+          </button>
+
+          {/* Lexicon Button (Right) */}
+          <button
+            onClick={() => setLexiconOpen(true)}
+            className="fixed top-4 right-4 px-4 py-2 rounded-full bg-white border border-neutral-200 text-neutral-600 text-sm font-mono hover:bg-neutral-50 hover:border-neutral-300 transition-all shadow-sm z-40"
+          >
+            Lexicon
+          </button>
+
+          {/* Modals */}
+          <About isOpen={aboutOpen} onClose={() => setAboutOpen(false)} />
+          <Lexicon isOpen={lexiconOpen} onClose={() => setLexiconOpen(false)} />
+
+          {/* Stats Display */}
+          <div className="flex gap-8 mb-6 text-sm font-mono">
+            <div className="text-neutral-500">
+              SRAM: <span className={`${l1Usage > 75 ? 'text-orange-500' : 'text-neutral-900'}`}>{l1Usage}%</span>
+            </div>
+            <div className="text-neutral-500">
+              TEMP: <span className={`${temp > 65 ? 'text-red-500' : 'text-neutral-900'}`}>{temp}°C</span>
+            </div>
+            <div className="text-neutral-500">
+              POWER: <span className="text-neutral-900">{power}W</span>
+            </div>
+          </div>
+
+          {/* Control Buttons */}
+          <div className="flex gap-3 mb-6">
+            <button
+              onClick={handleRestart}
+              className="px-6 py-2 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-colors"
+            >
+              Restart
+            </button>
+            <button
+              onClick={() => setIsPlaying(!isPlaying)}
+              className={`px-6 py-2 rounded-full transition-colors ${
+                isPlaying ? 'bg-neutral-900 text-white' : 'bg-white border border-neutral-300 text-neutral-700'
+              }`}
+            >
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
+          </div>
+
+          {/* Tamagotchi */}
+          <TenstorrentTamagotchi
+            temp={temp}
+            power={power}
+            l1Usage={l1Usage}
+            computing={isPlaying}
+            health={health}
+            opTimeline={mockOpTimeline}
+            opIndex={opIndex}
+            onTogglePlay={() => setIsPlaying(!isPlaying)}
+            showGhost={showGhost}
+            onToggleGhost={() => setShowGhost(!showGhost)}
+          />
+
+          {/* Current Operation Display */}
+          <div className="mt-4 text-center relative">
+            <div className="text-xs text-neutral-400 mb-1 flex items-center justify-center gap-1.5">
+              CURRENT OP
+              <div className="group relative">
+                <div className="w-4 h-4 rounded-full bg-neutral-300 text-neutral-600 text-[10px] font-bold flex items-center justify-center cursor-help hover:bg-neutral-400 transition-colors">
+                  i
+                </div>
+                {/* Tooltip */}
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-neutral-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-56 text-left z-50">
+                  Shows which AI operation is running. Press Play to cycle through operations like embedding, matmul, attention, etc. Each operation uses different Tensix cores on the grid.
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-neutral-800"></div>
+                </div>
+              </div>
+            </div>
+            <div className="font-mono text-lg text-green-500">{currentOp.name}</div>
+            <div className="text-xs text-neutral-500 mt-1">
+              {opIndex + 1}/{mockOpTimeline.length} · {currentOp.cores.length} cores active
+            </div>
+          </div>
+
+          {/* Health State Selector */}
+          <div className="mt-8">
+            <div className="flex items-center justify-center gap-4 mb-4">
+              <span className="text-sm text-neutral-500">Health Mode:</span>
+              <button
+                onClick={() => setAutoHealth(true)}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  autoHealth ? 'bg-neutral-900 text-white' : 'bg-white border border-neutral-300 text-neutral-600'
+                }`}
+              >
+                Auto
+              </button>
+              <button
+                onClick={() => setAutoHealth(false)}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  !autoHealth ? 'bg-neutral-900 text-white' : 'bg-white border border-neutral-300 text-neutral-600'
+                }`}
+              >
+                Manual
+              </button>
+            </div>
+            
+            {!autoHealth && (
+              <div className="flex gap-3 flex-wrap justify-center">
+                {[
+                  { id: 'healthy', label: 'Healthy', desc: 'Happy & computing' },
+                  { id: 'tired', label: 'Tired', desc: 'Low utilization' },
+                  { id: 'sick', label: 'Sick', desc: 'Memory pressure' },
+                  { id: 'critical', label: 'Critical', desc: 'Overheating!' },
+                  { id: 'dead', label: 'Dead', desc: 'System failure' },
+                ].map((state) => (
+                  <button
+                    key={state.id}
+                    onClick={() => setManualHealth(state.id)}
+                    className={`flex flex-col items-center p-2 rounded-lg transition-all ${
+                      manualHealth === state.id
+                        ? 'bg-neutral-900 text-white shadow-lg scale-105'
+                        : 'bg-white text-neutral-700 border border-neutral-200 hover:border-neutral-400'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{state.label}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {autoHealth && (
+              <div className="text-center text-xs text-neutral-400">
+                Health: <span className={`font-bold ${
+                  health === 'healthy' ? 'text-green-500' :
+                  health === 'tired' ? 'text-yellow-500' :
+                  health === 'sick' ? 'text-orange-500' :
+                  health === 'critical' ? 'text-red-500' :
+                  'text-neutral-500'
+                }`}>{health.toUpperCase()}</span>
+                <span className="ml-2 text-neutral-300">(computed from sliders)</span>
+              </div>
+            )}
+          </div>
+
+          {/* Control Sliders */}
+          <div className="mt-6 p-6 bg-white rounded-2xl shadow-sm border border-neutral-100 w-full max-w-md">
+            <div className="text-xs font-medium text-neutral-400 mb-4 text-center">SIMULATION CONTROLS</div>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-neutral-500">Temperature</span>
+                  <span className={`font-mono ${temp > 65 ? 'text-red-500' : temp > 70 ? 'text-red-600' : 'text-neutral-700'}`}>{temp}°C</span>
+                </div>
+                <input
+                  type="range"
+                  min="30"
+                  max="90"
+                  value={temp}
+                  onChange={(e) => setTemp(Number(e.target.value))}
+                  className="w-full accent-neutral-900"
+                />
+                <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
+                  <span>30°C</span>
+                  <span className="text-orange-400">65°C sick</span>
+                  <span className="text-red-400">70°C critical</span>
+                  <span>90°C</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-neutral-500">Power</span>
+                  <span className="font-mono text-neutral-700">{power}W</span>
+                </div>
+                <input
+                  type="range"
+                  min="10"
+                  max="200"
+                  value={power}
+                  onChange={(e) => setPower(Number(e.target.value))}
+                  className="w-full accent-neutral-900"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-neutral-500">L1 SRAM Usage</span>
+                  <span className={`font-mono ${l1Usage > 85 ? 'text-red-500' : l1Usage > 75 ? 'text-orange-500' : 'text-neutral-700'}`}>{l1Usage}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={l1Usage}
+                  onChange={(e) => setL1Usage(Number(e.target.value))}
+                  className="w-full accent-neutral-900"
+                />
+                <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
+                  <span>0%</span>
+                  <span className="text-orange-400">75% sick</span>
+                  <span className="text-red-400">85% critical</span>
+                  <span>100%</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-neutral-500">Utilization</span>
+                  <span className={`font-mono ${utilization < 0.5 ? 'text-yellow-500' : 'text-neutral-700'}`}>{(utilization * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={utilization * 100}
+                  onChange={(e) => setUtilization(Number(e.target.value) / 100)}
+                  className="w-full accent-neutral-900"
+                />
+                <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
+                  <span>0%</span>
+                  <span className="text-yellow-400">&lt;50% = tired</span>
+                  <span>100%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Health State Legend */}
+          <div className="mt-8 p-6 bg-white rounded-2xl shadow-sm border border-neutral-100 max-w-md w-full">
+            <div className="text-xs font-medium text-neutral-500 mb-3 text-center">HEALTH STATE THRESHOLDS</div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <span className="text-neutral-600">Healthy: temp&lt;65 & l1&lt;75</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                <span className="text-neutral-600">Tired: util &lt; 50%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                <span className="text-neutral-600">Sick: temp&gt;65 | l1&gt;75</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                <span className="text-neutral-600">Critical: temp&gt;70 | l1&gt;85</span>
+              </div>
+              <div className="flex items-center gap-2 col-span-2 justify-center">
+                <span className="w-2 h-2 rounded-full bg-neutral-500"></span>
+                <span className="text-neutral-600">Dead: temp&gt;75 AND l1&gt;90</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Core Activity Grid Explanation */}
+          <div className="mt-8 p-6 bg-white rounded-2xl shadow-sm border border-neutral-100 max-w-2xl w-full">
+            <div className="text-xs font-medium text-neutral-400 mb-4 text-center">CORE ACTIVITY GRID (2D TORUS NETWORK)</div>
+            <p className="text-sm text-neutral-600 mb-6 text-center">
+              Use the <strong>toggle switch</strong> on the device to switch between Ghost view and Grid-only view.
+              The grid represents the 12×12 Tensix core array. <span className="text-cyan-500 font-bold">Cyan dots</span> show active cores for the current operation.
+            </p>
+            
+            {/* Example Core Patterns */}
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { name: 'embedding', cores: [[0,0], [0,1], [1,0], [1,1], [0,2], [1,2]], desc: 'Top-left cluster' },
+                { name: 'matmul', cores: [[2,2], [3,3], [4,4], [5,5]], desc: 'Diagonal pattern' },
+                { name: 'attention', cores: [[3,5], [4,6], [5,7], [6,8], [7,9]], desc: 'Diagonal spread' },
+              ].map((op) => (
+                <div key={op.name} className="flex flex-col items-center">
+                  {/* Mini grid */}
+                  <div 
+                    className="rounded-lg p-1.5 mb-2"
+                    style={{ background: '#1a1a1a' }}
+                  >
+                    <div className="grid grid-cols-8 gap-px" style={{ width: '64px', height: '64px' }}>
+                      {[...Array(64)].map((_, idx) => {
+                        const row = Math.floor(idx / 8);
+                        const col = idx % 8;
+                        const isActive = op.cores.some(([r, c]) => r === row && c === col);
+                        return (
+                          <div
+                            key={idx}
+                            className={`rounded-sm ${isActive ? 'bg-cyan-400' : 'bg-neutral-700'}`}
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              boxShadow: isActive ? '0 0 4px rgba(34,211,238,0.8)' : 'none'
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="text-sm font-mono text-neutral-700">{op.name}</div>
+                  <div className="text-xs text-neutral-400">{op.desc}</div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-neutral-100 text-center">
+              <div className="text-xs text-neutral-400">
+                Each operation in the timeline activates specific cores. The pattern shows which Tensix cores are computing.
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
