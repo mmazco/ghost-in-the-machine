@@ -102,12 +102,12 @@ const computeHealth = (temp, l1Percent, utilization) => {
 
 ### Phase 2 Tasks
 
-- [ ] Create `sample-report.json` with realistic data
-- [ ] Add drag-drop JSON file loader component
-- [ ] Add "Load Report" button as alternative to drag-drop
-- [ ] Parse JSON and populate React state
-- [ ] Add "Data Source" toggle: Simulation vs Loaded Data
-- [ ] Keep simulation controls available for demo purposes
+- [x] Create `sample-report.json` with realistic data
+- [x] Add drag-drop JSON file loader component
+- [x] Add "Load Report" button as alternative to drag-drop (click to browse)
+- [x] Parse JSON and populate React state
+- [x] Add "Data Source" toggle: Simulation vs Loaded Data
+- [x] Keep simulation controls available for demo purposes
 - [ ] Test with various JSON configurations
 - [ ] (Future) Python script to convert ttnn-visualizer reports → Ghost JSON
 
