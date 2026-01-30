@@ -271,9 +271,13 @@ export default function Home() {
               <div className="text-xs text-neutral-500">
                 {loadedReport.device_info?.chip || 'Unknown chip'} · {loadedReport.op_timeline?.length || 0} ops
               </div>
-              <div className="text-xs text-neutral-400 mt-2">
-                Drop another file to replace
-              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                className="text-xs text-blue-500 hover:text-blue-600 mt-2 underline"
+              >
+                Load different file
+              </button>
             </div>
           ) : (
             <div>
@@ -285,9 +289,13 @@ export default function Home() {
               <div className="text-sm text-neutral-600 font-medium">
                 Drop JSON report here
               </div>
-              <div className="text-xs text-neutral-400 mt-1">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                className="text-xs text-blue-500 hover:text-blue-600 mt-1 underline"
+              >
                 or click to browse
-              </div>
+              </button>
             </div>
           )}
         </div>
