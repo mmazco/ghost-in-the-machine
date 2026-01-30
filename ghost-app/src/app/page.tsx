@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import TenstorrentTamagotchi from '@/components/TenstorrentTamagotchi';
 import { About, Lexicon } from '@/components/Modals';
+import CoreActivityGrid from '@/components/CoreActivityGrid';
 import { computeHealth, mockOpTimeline } from '@/utils/health';
 import { TelemetryReport, HealthState } from '@/types';
 
@@ -471,6 +472,9 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Core Activity Grid Explanation */}
+      <CoreActivityGrid />
 
       {/* Footer */}
       <div className="mt-8 text-xs text-neutral-400 text-center">
