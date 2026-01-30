@@ -282,10 +282,7 @@ export default function Home() {
                 </svg>
               </div>
               <div className="text-sm text-neutral-600 font-medium">
-                Drop JSON report here
-              </div>
-              <div className="text-xs text-blue-500 mt-1">
-                or click to browse
+                Upload .json report
               </div>
             </div>
           )}
