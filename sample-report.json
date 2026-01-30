@@ -1,0 +1,80 @@
+{
+  "report_name": "Llama-7B Inference Run",
+  "timestamp": "2026-01-28T15:30:00Z",
+  "device_info": {
+    "chip": "Wormhole",
+    "temp": 58,
+    "power": 95
+  },
+  "l1_usage": {
+    "used_bytes": 838860,
+    "total_bytes": 1048576
+  },
+  "op_timeline": [
+    {
+      "op_id": 1,
+      "name": "embedding",
+      "cores": [[0,0], [0,1], [0,2], [1,0], [1,1], [1,2]],
+      "duration_us": 120
+    },
+    {
+      "op_id": 2,
+      "name": "matmul",
+      "cores": [[0,0], [1,1], [2,2], [3,3], [4,4], [5,5], [6,6]],
+      "duration_us": 280
+    },
+    {
+      "op_id": 3,
+      "name": "layernorm",
+      "cores": [[4,4], [4,5], [5,4], [5,5]],
+      "duration_us": 65
+    },
+    {
+      "op_id": 4,
+      "name": "attention",
+      "cores": [[0,0], [2,2], [4,4], [6,6], [8,8], [10,10]],
+      "duration_us": 350
+    },
+    {
+      "op_id": 5,
+      "name": "softmax",
+      "cores": [[3,3], [4,3], [5,3], [3,4], [4,4]],
+      "duration_us": 45
+    },
+    {
+      "op_id": 6,
+      "name": "dropout",
+      "cores": [[7,7], [8,7], [7,8]],
+      "duration_us": 30
+    },
+    {
+      "op_id": 7,
+      "name": "linear",
+      "cores": [[9,0], [9,1], [9,2], [10,0], [10,1], [10,2], [11,0], [11,1]],
+      "duration_us": 190
+    },
+    {
+      "op_id": 8,
+      "name": "gelu",
+      "cores": [[6,8], [6,9], [7,8], [7,9]],
+      "duration_us": 55
+    },
+    {
+      "op_id": 9,
+      "name": "residual",
+      "cores": [[2,6], [3,6], [2,7], [3,7]],
+      "duration_us": 40
+    },
+    {
+      "op_id": 10,
+      "name": "output",
+      "cores": [[5,10], [6,10], [5,11], [6,11], [7,10], [7,11]],
+      "duration_us": 85
+    }
+  ],
+  "perf_summary": {
+    "total_ops": 10,
+    "avg_utilization": 0.82,
+    "total_duration_us": 1260
+  }
+}
