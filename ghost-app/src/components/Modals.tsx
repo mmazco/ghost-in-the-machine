@@ -46,11 +46,6 @@ export function About({ isOpen, onClose }: ModalProps) {
                 to real-time Tenstorrent telemetry data.
               </p>
             </div>
-            <div className="mt-6 pt-4 border-t border-neutral-100 text-center text-xs text-neutral-400">
-              <span>Made by </span>
-              <a href="https://x.com/mmazco" target="_blank" rel="noopener noreferrer" 
-                 className="text-blue-500 hover:underline">@mmazco</a>
-            </div>
           </motion.div>
         </motion.div>
       )}
