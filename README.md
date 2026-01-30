@@ -1,82 +1,58 @@
 # Ghost in the Machine 👻
 
-A machine health interface for **Tenstorrent's Tensix cores telemetry data** to show performance of the hardware. Translating raw tt-smi telemetry ([ttnn-visualizer](https://github.com/tenstorrent/ttnn-visualizer)) into a visual language for a wider audience to understand how hardware works, effectively 'humanizing' the silicon.
-
-![Ghost in the Machine Demo](https://img.shields.io/badge/Status-Prototype-green)
-
-## Overview
-
-The prototype is a React component styled like a retro 8-bit Tamagotchi in a minimal web-based system health dashboard. Instead of showing standard hardware graphs, it uses a **'ghost' character** (the silicon soul) whose mood and animations are directly mapped to real-time Tenstorrent telemetry data.
+A Tamagotchi-style dashboard for **Tenstorrent Tensix cores telemetry**. Translates hardware metrics into an animated ghost character—humanizing silicon.
 
 ## Features
 
-### Health States
-The ghost's appearance changes based on hardware metrics:
-- **Healthy** - Normal operation, happy ghost with pink blush
-- **Tired** - Low utilization (<50%), droopy eyes
-- **Sick** - High temp (>65°C) or L1 usage (>75%), spiral eyes
-- **Critical** - Dangerous levels (temp >70°C or L1 >85%), warning indicator
-- **Dead** - System failure (temp >75°C AND L1 >90%), X eyes
-
-### Visual Indicators
-- **Red eyes** - Temperature > 65°C
-- **Sweat drops** - Overheating
-- **Pink blush** - Healthy and cool
-- **Golden sparkles** - Actively computing
-- **Belly expansion** - High L1 SRAM usage
-
-### Core Activity Grid
-- 12×12 grid representing the Tensix core array (2D Torus Network)
-- Cyan-highlighted dots show active cores for current operation
-- Toggle between ghost view and grid-only view
-- Animated operation timeline: embedding → matmul → layernorm → attention → softmax → ffn → residual → output
+- **5 Health States**: Healthy → Tired → Sick → Critical → Dead (based on temp, L1 usage, utilization)
+- **12×12 Core Grid**: Visualizes active Tensix cores per operation
+- **Toggle View**: Switch between Ghost SVG and pixelated grid
+- **JSON Upload**: Load real telemetry reports or use simulation sliders
+- **Animated Timeline**: Cycles through ops (embedding, matmul, attention, etc.)
 
 ## Quick Start
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/mmazco/ghost-in-the-machine.git
-cd ghost-in-the-machine
+cd ghost-app
+npm install
+npm run dev
 ```
 
-2. Start a local server:
+Open http://localhost:3000
+
+## Deploy to Railway
+
 ```bash
-python3 -m http.server 8080
+cd ghost-app
+railway up
 ```
 
-3. Open in browser:
-```
-http://localhost:8080/TenstorrentTamagotchi.html
-```
+## Health Thresholds
 
-## Files
+| State | Condition |
+|-------|-----------|
+| Dead | temp > 75°C AND L1 > 90% |
+| Critical | temp > 70°C OR L1 > 85% |
+| Sick | temp > 65°C OR L1 > 75% |
+| Tired | utilization < 50% |
+| Healthy | default |
 
-- `TenstorrentTamagotchi.html` - Main standalone demo (React + Tailwind + Framer Motion via CDN)
-- `TenstorrentTamagotchi.jsx` - React component source
-- `GhostStatesStatic.html` - Static reference for ghost states
+## JSON Schema
+
+```json
+{
+  "device_info": { "chip": "Wormhole", "temp": 58, "power": 95 },
+  "l1_usage": { "used_bytes": 838860, "total_bytes": 1048576 },
+  "op_timeline": [
+    { "op_id": 1, "name": "matmul", "cores": [[0,0], [1,1]] }
+  ],
+  "perf_summary": { "avg_utilization": 0.82 }
+}
+```
 
 ## Tech Stack
 
-- React 18
-- Tailwind CSS
-- Framer Motion
-- Vanilla JavaScript/HTML
-
-## Controls
-
-- **Play/Pause** - Animate through operation timeline
-- **Toggle Switch** - Switch between Ghost view and Grid-only view
-- **Sliders** - Simulate temperature, power, L1 usage, and utilization
-- **Health Mode** - Auto (computed from metrics) or Manual selection
-
-## Inspired By
-
-- [Focus Music Maker](https://focus-music-maker.vercel.app/) - Minimal Apple-style UI
-- [ttnn-visualizer](https://github.com/tenstorrent/ttnn-visualizer) - Tenstorrent's model visualization tool
-
-## Author
-
-Made by [@mmazco](https://x.com/mmazco)
+Next.js 15 · React 19 · TypeScript · Tailwind CSS · Framer Motion
 
 ## License
 
