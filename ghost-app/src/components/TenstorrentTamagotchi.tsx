@@ -1,9 +1,25 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import Ghost from './Ghost';
 import { HealthState, Operation } from '@/types';
+
+// Memoized Toggle Switch to prevent re-renders during playback
+const ToggleSwitch = memo(({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
+  <div
+    className="relative w-8 h-14 bg-neutral-300 rounded-full cursor-pointer shadow-inner"
+    onClick={onToggle}
+  >
+    <motion.div
+      className="absolute left-1 w-6 h-6 bg-neutral-700 rounded-full shadow-md"
+      initial={false}
+      animate={{ top: on ? 6 : 30 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+    />
+  </div>
+));
+ToggleSwitch.displayName = 'ToggleSwitch';
 
 interface TenstorrentTamagotchiProps {
   temp: number;
@@ -128,19 +144,6 @@ export default function TenstorrentTamagotchi({
     </div>
   );
 
-  // Vertical toggle switch like the original
-  const ToggleSwitch = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
-    <div
-      className="relative w-8 h-14 bg-neutral-300 rounded-full cursor-pointer shadow-inner"
-      onClick={onToggle}
-    >
-      <motion.div
-        className="absolute left-1 w-6 h-6 bg-neutral-700 rounded-full shadow-md"
-        animate={{ top: on ? 6 : 30 }}
-        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-      />
-    </div>
-  );
 
   const DialButton = ({ icon, onClick }: { icon: React.ReactNode; onClick: () => void }) => (
     <motion.button
