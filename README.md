@@ -1,6 +1,7 @@
 # Ghost in the Machine 👻
 
 A Tamagotchi-style dashboard for **Tenstorrent Tensix cores telemetry**. Translates hardware metrics into an animated ghost character—humanizing silicon.
+Read more here https://hackmd.io/2qfMbUTmSPK9frwKdR3VCA?view 
 
 ## Features
 
