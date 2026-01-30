@@ -243,12 +243,11 @@ export default function Home() {
         </div>
 
         {/* File Drop Zone */}
-        <div
-          onClick={() => fileInputRef.current?.click()}
+        <label
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
+          className={`relative block border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
             isDragging 
               ? 'border-green-500 bg-green-50' 
               : loadedReport 
@@ -261,26 +260,22 @@ export default function Home() {
             type="file"
             accept=".json"
             onChange={handleFileInput}
-            className="hidden"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           {loadedReport ? (
-            <div>
+            <div className="pointer-events-none">
               <div className="text-green-600 font-medium text-sm mb-1">
                 ✓ {loadedReport.report_name || 'Report Loaded'}
               </div>
               <div className="text-xs text-neutral-500">
                 {loadedReport.device_info?.chip || 'Unknown chip'} · {loadedReport.op_timeline?.length || 0} ops
               </div>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                className="text-xs text-blue-500 hover:text-blue-600 mt-2 underline"
-              >
-                Load different file
-              </button>
+              <div className="text-xs text-blue-500 mt-2">
+                Click to load different file
+              </div>
             </div>
           ) : (
-            <div>
+            <div className="pointer-events-none">
               <div className="text-neutral-400 mb-2">
                 <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -289,16 +284,12 @@ export default function Home() {
               <div className="text-sm text-neutral-600 font-medium">
                 Drop JSON report here
               </div>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                className="text-xs text-blue-500 hover:text-blue-600 mt-1 underline"
-              >
+              <div className="text-xs text-blue-500 mt-1">
                 or click to browse
-              </button>
+              </div>
             </div>
           )}
-        </div>
+        </label>
 
         {loadError && (
           <div className="mt-3 text-xs text-red-500 text-center">
