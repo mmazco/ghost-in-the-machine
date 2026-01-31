@@ -17,6 +17,37 @@ export default function Home() {
   const [opIndex, setOpIndex] = useState(0);
   const [autoHealth, setAutoHealth] = useState(true);
   const [manualHealth, setManualHealth] = useState<HealthState>('healthy');
+
+  // Set simulation values to match a health state
+  const setSimulationForState = useCallback((state: HealthState) => {
+    switch (state) {
+      case 'healthy':
+        setTemp(52);
+        setL1Usage(50);
+        setUtilization(0.78);
+        break;
+      case 'tired':
+        setTemp(50);
+        setL1Usage(40);
+        setUtilization(0.35);
+        break;
+      case 'sick':
+        setTemp(67);
+        setL1Usage(78);
+        setUtilization(0.70);
+        break;
+      case 'critical':
+        setTemp(72);
+        setL1Usage(87);
+        setUtilization(0.65);
+        break;
+      case 'dead':
+        setTemp(78);
+        setL1Usage(92);
+        setUtilization(0.20);
+        break;
+    }
+  }, []);
   const [showGhost, setShowGhost] = useState(true);
   
   // Modal state
@@ -344,7 +375,10 @@ export default function Home() {
             {(['healthy', 'tired', 'sick', 'critical', 'dead'] as HealthState[]).map((state) => (
               <button
                 key={state}
-                onClick={() => setManualHealth(state)}
+                onClick={() => {
+                  setManualHealth(state);
+                  setSimulationForState(state);
+                }}
                 className={`px-3 py-2 rounded-lg text-xs transition-all ${
                   manualHealth === state
                     ? 'bg-neutral-900 text-white shadow-lg scale-105'
