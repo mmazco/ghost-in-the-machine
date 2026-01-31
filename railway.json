@@ -1,0 +1,10 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "watchPatterns": ["ghost-app/**"]
+  },
+  "deploy": {
+    "rootDirectory": "ghost-app"
+  }
+}
