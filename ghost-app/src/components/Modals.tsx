@@ -45,6 +45,20 @@ export function About({ isOpen, onClose }: ModalProps) {
                 a &apos;ghost&apos; character (the silicon soul) whose mood and animations are directly mapped 
                 to real-time Tenstorrent telemetry data.
               </p>
+              
+              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h3 className="text-sm font-semibold text-yellow-800 mb-2">Disclaimer</h3>
+                <p className="text-sm text-yellow-700 leading-relaxed">
+                  To simulate a health state, you can upload a telemetry report JSON file and press play. 
+                  In the open{' '}
+                  <a href="https://github.com/mmazco/ghost-in-the-machine" target="_blank" rel="noopener noreferrer" 
+                     className="text-yellow-800 hover:text-yellow-900 underline font-medium">
+                    GitHub
+                  </a>{' '}
+                  you can find a sample JSON with 10 operations parameters. The &quot;sample-report.json&quot; is a 
+                  simplified mock schema created for this demo. Actual ttnn-visualizer uses a much more complex structure.
+                </p>
+              </div>
             </div>
           </motion.div>
         </motion.div>
